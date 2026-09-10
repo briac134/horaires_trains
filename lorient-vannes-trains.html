@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lorient ⇄ Vannes — Prochains trains</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --card: #1e293b;
+    --card-border: #334155;
+    --accent: #ec6608; /* orange SNCF */
+    --accent2: #3b82f6;
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+    --ok: #22c55e;
+    --warn: #f59e0b;
+    --err: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 16px;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 1.3rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 0.85rem; margin-bottom: 16px; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+
+  .apikey-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .apikey-row input {
+    flex: 1;
+    min-width: 180px;
+    background: #0b1220;
+    border: 1px solid var(--card-border);
+    color: var(--text);
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+  }
+  .apikey-row a { color: var(--accent2); font-size: 0.8rem; }
+  .key-status { font-size: 0.78rem; margin-top: 6px; color: var(--muted); }
+
+  .direction {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    font-size: 1.05rem;
+    font-weight: 600;
+  }
+  .direction button {
+    background: #0b1220;
+    border: 1px solid var(--card-border);
+    color: var(--text);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    min-width: 100px;
+  }
+  .swap-btn {
+    background: var(--accent) !important;
+    border: none !important;
+    color: white !important;
+    cursor: pointer;
+    font-size: 1.2rem !important;
+    padding: 10px 12px !important;
+    min-width: auto !important;
+    border-radius: 50% !important;
+  }
+
+  .status-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-top: 10px;
+  }
+  .dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--ok);
+    margin-right: 5px;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+  .refresh-btn {
+    background: none;
+    border: 1px solid var(--card-border);
+    color: var(--muted);
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    cursor: pointer;
+  }
+
+  .train {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--card-border);
+  }
+  .train:last-child { border-bottom: none; }
+  .train .time {
+    min-width: 62px;
+    font-weight: 700;
+    font-size: 1.15rem;
+  }
+  .train .time small { display:block; font-weight:400; font-size:0.65rem; color: var(--muted); }
+  .train .mode {
+    background: var(--accent);
+    color: white;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 3px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+  .train .info { flex: 1; }
+  .train .info .route { font-size: 0.85rem; color: var(--muted); }
+  .train .duration { font-size: 0.78rem; color: var(--muted); text-align: right; min-width: 70px; }
+  .train .delay { color: var(--err); font-weight: 700; }
+  .train .ontime { color: var(--ok); }
+
+  .empty, .error, .loading {
+    text-align: center;
+    padding: 24px 8px;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+  .error { color: var(--err); }
+
+  .countdown { font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🚆 Lorient ⇄ Vannes</h1>
+  <div class="sub">Horaires en direct via l'API officielle SNCF (Navitia)</div>
+
+  <div class="card">
+    <div class="apikey-row">
+      <input type="password" id="apiKey" placeholder="Clé API SNCF (gratuite)">
+      <button class="refresh-btn" onclick="saveKey()">Enregistrer</button>
+    </div>
+    <div class="key-status" id="keyStatus">
+      Obtenez une clé gratuite sur
+      <a href="https://www.digital.sncf.com/startup/api" target="_blank">digital.sncf.com/startup/api</a>
+      puis collez-la ci-dessus.
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="direction">
+      <button id="fromBtn">Lorient</button>
+      <button class="swap-btn" onclick="swapDirection()" title="Inverser">⇄</button>
+      <button id="toBtn">Vannes</button>
+    </div>
+    <div class="status-row">
+      <span><span class="dot"></span><span id="lastUpdate">—</span></span>
+      <span>
+        <span class="countdown" id="countdown"></span>
+        <button class="refresh-btn" onclick="search(true)">Rafraîchir</button>
+      </span>
+    </div>
+  </div>
+
+  <div class="card" id="results">
+    <div class="empty">Renseignez votre clé API pour voir les prochains trains.</div>
+  </div>
+</div>
+
+<script>
+// --- Config ---
+const STATIONS = {
+  lorient: { label: "Lorient", query: "Lorient" },
+  vannes:  { label: "Vannes",  query: "Vannes" }
+};
+let direction = "lorient_to_vannes"; // or vannes_to_lorient
+let stopAreaCache = {}; // query -> stop_area id
+let autoRefreshTimer = null;
+let countdownTimer = null;
+let secondsToRefresh = 60;
+const REFRESH_INTERVAL = 60;
+
+const apiKeyInput = document.getElementById('apiKey');
+const keyStatus = document.getElementById('keyStatus');
+const resultsEl = document.getElementById('results');
+const lastUpdateEl = document.getElementById('lastUpdate');
+const countdownEl = document.getElementById('countdown');
+const fromBtn = document.getElementById('fromBtn');
+const toBtn = document.getElementById('toBtn');
+
+// Load saved key
+const savedKey = localStorage.getItem('sncf_api_key');
+if (savedKey) {
+  apiKeyInput.value = savedKey;
+  keyStatus.textContent = "Clé chargée depuis ce navigateur.";
+}
+
+function saveKey() {
+  const key = apiKeyInput.value.trim();
+  if (!key) return;
+  localStorage.setItem('sncf_api_key', key);
+  keyStatus.textContent = "Clé enregistrée. Recherche en cours…";
+  stopAreaCache = {};
+  search(true);
+}
+
+function swapDirection() {
+  direction = direction === "lorient_to_vannes" ? "vannes_to_lorient" : "lorient_to_vannes";
+  updateDirectionUI();
+  search(true);
+}
+
+function updateDirectionUI() {
+  const [fromKey, toKey] = direction === "lorient_to_vannes"
+    ? ["lorient", "vannes"] : ["vannes", "lorient"];
+  fromBtn.textContent = STATIONS[fromKey].label;
+  toBtn.textContent = STATIONS[toKey].label;
+}
+updateDirectionUI();
+
+function pad(n) { return n.toString().padStart(2, "0"); }
+
+function navitiaDateTime(d) {
+  return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+}
+
+function parseNavitiaDateTime(s) {
+  // format YYYYMMDDTHHMMSS
+  const y = s.slice(0,4), mo = s.slice(4,6), d = s.slice(6,8);
+  const h = s.slice(9,11), mi = s.slice(11,13), se = s.slice(13,15);
+  return new Date(`${y}-${mo}-${d}T${h}:${mi}:${se}`);
+}
+
+async function navitiaFetch(path) {
+  const key = localStorage.getItem('sncf_api_key');
+  if (!key) throw new Error("NO_KEY");
+  const resp = await fetch(`https://api.sncf.com/v1/coverage/sncf${path}`, {
+    headers: { "Authorization": "Basic " + btoa(key + ":") }
+  });
+  if (resp.status === 401) throw new Error("BAD_KEY");
+  if (!resp.ok) throw new Error("HTTP_" + resp.status);
+  return resp.json();
+}
+
+async function resolveStopArea(query) {
+  if (stopAreaCache[query]) return stopAreaCache[query];
+  const data = await navitiaFetch(`/places?q=${encodeURIComponent(query)}&type[]=stop_area&count=1`);
+  const place = data.places && data.places[0];
+  if (!place) throw new Error("STATION_NOT_FOUND:" + query);
+  stopAreaCache[query] = place.id;
+  return place.id;
+}
+
+function renderLoading() {
+  resultsEl.innerHTML = `<div class="loading">Recherche des prochains trains…</div>`;
+}
+
+function renderError(msg) {
+  resultsEl.innerHTML = `<div class="error">${msg}</div>`;
+}
+
+function formatDuration(seconds) {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.round((seconds % 3600) / 60);
+  return h > 0 ? `${h}h${pad(m)}` : `${m} min`;
+}
+
+function renderJourneys(journeys) {
+  if (!journeys || journeys.length === 0) {
+    resultsEl.innerHTML = `<div class="empty">Aucun train trouvé pour les prochaines heures.</div>`;
+    return;
+  }
+  const html = journeys.map(j => {
+    const dep = parseNavitiaDateTime(j.departure_date_time);
+    const arr = parseNavitiaDateTime(j.arrival_date_time);
+    const ptSection = (j.sections || []).find(s => s.type === "public_transport");
+    const mode = ptSection && ptSection.display_informations
+      ? (ptSection.display_informations.commercial_mode || ptSection.display_informations.network || "Train")
+      : "Train";
+    const headsign = ptSection && ptSection.display_informations
+      ? (ptSection.display_informations.headsign || "")
+      : "";
+    const nbConnections = (j.sections || []).filter(s => s.type === "public_transport").length;
+    const direct = nbConnections <= 1;
+    const disrupted = j.status && j.status !== "" && j.status !== "NO_SERVICE" ? j.status : null;
+
+    return `
+      <div class="train">
+        <div class="time">
+          ${pad(dep.getHours())}:${pad(dep.getMinutes())}
+          <small>arr. ${pad(arr.getHours())}:${pad(arr.getMinutes())}</small>
+        </div>
+        <div class="mode">${mode}</div>
+        <div class="info">
+          <div>${headsign ? "Train " + headsign : "Train"}</div>
+          <div class="route">${direct ? "Direct" : nbConnections + " correspondances"}${disrupted ? ` · <span class="delay">${disrupted}</span>` : ""}</div>
+        </div>
+        <div class="duration">${formatDuration(j.duration)}</div>
+      </div>`;
+  }).join("");
+  resultsEl.innerHTML = html;
+}
+
+async function search(manual) {
+  const key = localStorage.getItem('sncf_api_key');
+  if (!key) {
+    resultsEl.innerHTML = `<div class="empty">Renseignez votre clé API pour voir les prochains trains.</div>`;
+    return;
+  }
+  renderLoading();
+  try {
+    const [fromKey, toKey] = direction === "lorient_to_vannes"
+      ? ["lorient", "vannes"] : ["vannes", "lorient"];
+    const fromId = await resolveStopArea(STATIONS[fromKey].query);
+    const toId = await resolveStopArea(STATIONS[toKey].query);
+    const now = new Date();
+    const dt = navitiaDateTime(now);
+    const data = await navitiaFetch(
+      `/journeys?from=${encodeURIComponent(fromId)}&to=${encodeURIComponent(toId)}&datetime=${dt}&count=6&data_freshness=realtime`
+    );
+    renderJourneys(data.journeys);
+    lastUpdateEl.textContent = "MAJ " + pad(now.getHours()) + ":" + pad(now.getMinutes()) + ":" + pad(now.getSeconds());
+  } catch (e) {
+    if (e.message === "NO_KEY") {
+      renderError("Aucune clé API renseignée.");
+    } else if (e.message === "BAD_KEY") {
+      renderError("Clé API invalide ou refusée par le serveur SNCF.");
+    } else if (e.message.startsWith("STATION_NOT_FOUND")) {
+      renderError("Gare introuvable : " + e.message.split(":")[1]);
+    } else {
+      renderError("Erreur lors de la requête (" + e.message + "). Vérifiez la clé et la connexion.");
+    }
+  }
+  resetCountdown();
+}
+
+function resetCountdown() {
+  secondsToRefresh = REFRESH_INTERVAL;
+}
+
+function tickCountdown() {
+  secondsToRefresh--;
+  if (secondsToRefresh <= 0) {
+    search(false);
+    return;
+  }
+  countdownEl.textContent = "prochaine MAJ dans " + secondsToRefresh + "s";
+}
+
+// init
+if (savedKey) search(true);
+countdownTimer = setInterval(tickCountdown, 1000);
+</script>
+</body>
+</html>
