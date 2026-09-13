@@ -333,7 +333,7 @@ async function search(manual) {
     const now = new Date();
     const dt = navitiaDateTime(now);
     const data = await navitiaFetch(
-      `/journeys?from=${encodeURIComponent(fromId)}&to=${encodeURIComponent(toId)}&datetime=${dt}&count=6&data_freshness=realtime`
+      `/journeys?from=${encodeURIComponent(fromId)}&to=${encodeURIComponent(toId)}&datetime=${dt}&count=20&data_freshness=realtime`
     );
     renderJourneys(data.journeys);
     lastUpdateEl.textContent = "MAJ " + pad(now.getHours()) + ":" + pad(now.getMinutes()) + ":" + pad(now.getSeconds());
