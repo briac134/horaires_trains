@@ -1,3 +1,3 @@
 # horaires_trains
 
-Codé par Claude
+Codé par Claude. N'a qu'un objectif fonctionnel.
