@@ -190,11 +190,19 @@ const STATIONS = {
   lorient: { label: "Lorient", query: "Lorient" },
   vannes:  { label: "Vannes",  query: "Vannes" }
 };
-let direction = "lorient_to_vannes"; // or vannes_to_lorient
+const CITY_COORDS = {
+  lorient: { lat: 47.7556, lon: -3.3664 },
+  vannes:  { lat: 47.6582, lon: -2.7608 }
+};
+const GEO_MATCH_RADIUS_METERS = 20000; // ~20 km autour de chaque ville
+const GEO_TIE_EPSILON_METERS = 100; // marge pour éviter une sélection arbitraire en cas d'égalité
+
+let direction = "vannes_to_lorient"; // or lorient_to_vannes
 let stopAreaCache = {}; // query -> stop_area id
 let autoRefreshTimer = null;
 let countdownTimer = null;
 let secondsToRefresh = 60;
+let isDirectionInitialized = false;
 const REFRESH_INTERVAL = 60;
 
 const apiKeyInput = document.getElementById('apiKey');
@@ -236,6 +244,63 @@ function updateDirectionUI() {
 updateDirectionUI();
 
 function pad(n) { return n.toString().padStart(2, "0"); }
+
+function toRad(degrees) {
+  return degrees * Math.PI / 180;
+}
+
+function haversineDistanceMeters(lat1, lon1, lat2, lon2) {
+  const earthRadiusMeters = 6371000;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadiusMeters * c;
+}
+
+function pickDirectionFromCoordinates(latitude, longitude) {
+  const lorientDistance = haversineDistanceMeters(
+    latitude, longitude,
+    CITY_COORDS.lorient.lat, CITY_COORDS.lorient.lon
+  );
+  const vannesDistance = haversineDistanceMeters(
+    latitude, longitude,
+    CITY_COORDS.vannes.lat, CITY_COORDS.vannes.lon
+  );
+  const isTie = Math.abs(lorientDistance - vannesDistance) <= GEO_TIE_EPSILON_METERS;
+  const isTooFarFromBoth = lorientDistance > GEO_MATCH_RADIUS_METERS && vannesDistance > GEO_MATCH_RADIUS_METERS;
+
+  if (isTie || isTooFarFromBoth) {
+    return "vannes_to_lorient";
+  }
+  return lorientDistance < vannesDistance ? "lorient_to_vannes" : "vannes_to_lorient";
+}
+
+function initDirectionFromGeolocation() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve();
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        direction = pickDirectionFromCoordinates(position.coords.latitude, position.coords.longitude);
+        updateDirectionUI();
+        resolve();
+      },
+      () => {
+        resolve();
+      },
+      {
+        enableHighAccuracy: false,
+        timeout: 10000,
+        maximumAge: 300000
+      }
+    );
+  });
+}
 
 function navitiaDateTime(d) {
   return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
@@ -356,6 +421,10 @@ function resetCountdown() {
 }
 
 function tickCountdown() {
+  if (!isDirectionInitialized) {
+    countdownEl.textContent = "initialisation de la localisation…";
+    return;
+  }
   secondsToRefresh--;
   if (secondsToRefresh <= 0) {
     search(false);
@@ -365,7 +434,11 @@ function tickCountdown() {
 }
 
 // init
-if (savedKey) search(true);
+initDirectionFromGeolocation().finally(() => {
+  isDirectionInitialized = true;
+  resetCountdown();
+  if (savedKey) search(true);
+});
 countdownTimer = setInterval(tickCountdown, 1000);
 </script>
 </body>
